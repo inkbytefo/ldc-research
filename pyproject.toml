@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ldc-research"
+version = "0.1.0"
+description = "LDC v2: Latent Diffusion Cognition research prototype"
+requires-python = ">=3.10"
+readme = "README.md"
+license = {file = "LICENSE"}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning:torch",
+]

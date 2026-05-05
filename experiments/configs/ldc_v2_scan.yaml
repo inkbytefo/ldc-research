@@ -1,0 +1,42 @@
+defaults:
+  - base
+  - _self_
+
+experiment_name: ldc_v2_scan_simple
+
+model:
+  type: ldc_v2
+  d_model: 96
+  d_concept: 64
+  n_heads: 4
+  # Phase 1 layer counts chosen so the total param count matches baseline within 5%.
+  # Encoder: 2 layers. Denoiser: 2 layers. Decoder: 2 layers. ~ 6 transformer layers
+  # plus slot attention + projections. Verified by tests/test_param_match.py.
+  enc_layers: 2
+  denoiser_layers: 2
+  dec_layers: 2
+  ffn_mult: 4
+  dropout: 0.1
+
+  # Concept space
+  num_slots: 8
+  num_relations: 4
+
+  # Diffusion
+  num_diffusion_steps: 20
+  schedule: cosine
+  alpha_lm: 1.0
+  alpha_diff: 1.0
+  decoder_input: clean   # "clean" | "refined" — Phase 1 uses clean
+
+trainer:
+  max_steps: 20000
+  lr: 3.0e-4
+  warmup_steps: 1000
+
+data:
+  scan_split: simple
+  batch_size: 64
+
+wandb:
+  tags: [ldc_v2, scan, ${data.scan_split}]

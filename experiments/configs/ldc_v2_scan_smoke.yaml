@@ -1,0 +1,30 @@
+defaults:
+  - ldc_v2_scan
+  - _self_
+
+experiment_name: smoke_ldc_v2
+device: cpu
+
+data:
+  source: synthetic
+  batch_size: 8
+  synthetic_train_size: 64
+  synthetic_val_size: 16
+
+model:
+  d_model: 32
+  d_concept: 32
+  n_heads: 2
+  enc_layers: 1
+  denoiser_layers: 1
+  dec_layers: 1
+  num_slots: 4
+  num_relations: 2
+  num_diffusion_steps: 5
+
+trainer:
+  max_steps: 20
+  log_every: 5
+  eval_every: 20
+  save_every: 1000000
+  warmup_steps: 5
