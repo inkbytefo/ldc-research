@@ -12,4 +12,5 @@ LDC v2 is a hybrid neural architecture that performs iterative refinement in a s
 - `results/`: Experimental results and final reports.
 
 ## Getting Started
-See `docs/ldc-gelistirme-rehberi.md` for the development guide.
+- `docs/yol-haritasi.md`: Step-by-step roadmap with phases, gates, and success criteria.
+- `docs/ldc-gelistirme-rehberi.md`: Development guide.
