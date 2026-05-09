@@ -105,14 +105,16 @@ class LDCModel(nn.Module):
         if self.config.decoder_input == "clean":
             decoder_memory = c_0
         elif self.config.decoder_input == "refined":
-            # Phase 6+ option: also pass the noised + denoised graph.
-            with torch.no_grad():
-                decoder_memory = c_t - self.diffusion._extract(
-                    self.diffusion.sqrt_one_minus_alphas_cumprod, t, c_t.shape
-                ) * noise_pred
-                decoder_memory = decoder_memory / self.diffusion._extract(
-                    self.diffusion.sqrt_alphas_cumprod, t, c_t.shape
-                ).clamp_min(1e-6)
+            # Predicted x_0 from a single denoising step at random t.
+            # No detach: LM loss must flow back through the diffusion so the
+            # denoiser learns to produce decoder-useful refined graphs.
+            sqrt_one_minus = self.diffusion._extract(
+                self.diffusion.sqrt_one_minus_alphas_cumprod, t, c_t.shape
+            )
+            sqrt_alpha = self.diffusion._extract(
+                self.diffusion.sqrt_alphas_cumprod, t, c_t.shape
+            ).clamp_min(1e-6)
+            decoder_memory = (c_t - sqrt_one_minus * noise_pred) / sqrt_alpha
         else:
             raise ValueError(f"unknown decoder_input: {self.config.decoder_input}")
 
