@@ -222,7 +222,8 @@ class TransformerSeq2Seq(nn.Module):
         tgt = torch.full((B, 1), sos_id, dtype=torch.long, device=device)
         tgt_mask = torch.ones((B, 1), dtype=torch.bool, device=device)
         finished = torch.zeros(B, dtype=torch.bool, device=device)
-        for _ in range(max_len - 1):
+        effective_max = min(max_len, self.config.max_tgt_len)
+        for _ in range(effective_max - 1):
             logits = self.decode(tgt, memory, tgt_mask, src_mask)
             next_tok = logits[:, -1].argmax(-1)
             next_tok = torch.where(finished, torch.full_like(next_tok, self.config.tgt_pad_id), next_tok)

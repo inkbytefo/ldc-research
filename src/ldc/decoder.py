@@ -115,8 +115,8 @@ class LDCDecoder(nn.Module):
 
         tgt = torch.full((B, 1), sos_id, dtype=torch.long, device=device)
         finished = torch.zeros(B, dtype=torch.bool, device=device)
-
-        for _ in range(max_len - 1):
+        effective_max = min(max_len, self.cfg.max_len)
+        for _ in range(effective_max - 1):
             L = tgt.size(1)
             causal = torch.triu(
                 torch.ones(L, L, dtype=torch.bool, device=device), diagonal=1
