@@ -94,6 +94,7 @@ def main(cfg: DictConfig) -> dict[str, float]:
 
     train_loader = loaders["train_loader"]
     val_loader = loaders["val_loader"]
+    test_loader = loaders.get("test_loader")
 
     step = 0
     best_val_acc = -1.0
@@ -174,11 +175,28 @@ def main(cfg: DictConfig) -> dict[str, float]:
             ckpt_path = output_dir / f"step_{step}.pt"
             torch.save({"model": model.state_dict(), "step": step}, ckpt_path)
 
+    # ---- Final evaluation on held-out test set ----
+    test_metrics: dict[str, float] = {}
+    if test_loader is not None:
+        test_metrics = evaluate(
+            model,
+            test_loader,
+            device,
+            src_tok=loaders["src_tok"],
+            tgt_tok=loaders["tgt_tok"],
+            max_batches=0,  # full test set, no limit
+            num_gen_examples=0,
+            max_gen_len=cfg.data.max_tgt_len,
+        )
+        log.info("TEST (held-out): %s", test_metrics)
+        if wandb_run is not None:
+            wandb_run.log({f"test/{k}": v for k, v in test_metrics.items()}, step=step)
+
     if wandb_run is not None:
         wandb_run.finish()
 
-    log.info("Done. final metrics: %s", final_metrics)
-    return final_metrics
+    log.info("Done. val_metrics: %s | test_metrics: %s", final_metrics, test_metrics)
+    return {**final_metrics, **{f"test_{k}": v for k, v in test_metrics.items()}}
 
 
 if __name__ == "__main__":
