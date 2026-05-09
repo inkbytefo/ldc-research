@@ -150,10 +150,18 @@ cython_debug/
 # VS Code
 .vscode/
 
+# Claude Code
+.claude/
+
 # Project specific
-results/
 wandb/
 outputs/
 multirun/
-data/
+/data/
 *.png
+*.pt
+*.pth
+*.ckpt
+lightning_logs/
+.lightning/
+# Note: results/ contains MD reports — committed to git.

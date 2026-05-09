@@ -1,0 +1,38 @@
+defaults:
+  - base
+  - _self_
+
+experiment_name: ldc_v2_scan_aroundright
+
+model:
+  type: ldc_v2
+  d_model: 96
+  d_concept: 64
+  n_heads: 4
+  enc_layers: 2
+  denoiser_layers: 2
+  dec_layers: 2
+  ffn_mult: 4
+  dropout: 0.1
+  num_slots: 8
+  num_relations: 4
+  num_diffusion_steps: 20
+  schedule: cosine
+  alpha_lm: 1.0
+  alpha_diff: 1.0
+  decoder_input: clean
+
+trainer:
+  max_steps: 20000
+  lr: 3.0e-4
+  warmup_steps: 1000
+
+data:
+  scan_split: template_around_right
+  batch_size: 64
+
+wandb:
+  tags:
+    - ldc_v2
+    - scan
+    - around_right

@@ -1,0 +1,46 @@
+# Shared defaults for all experiments. Specific configs override fields below.
+defaults:
+  - _self_
+
+seed: 0
+device: cuda  # set to "cpu" by smoke configs
+output_dir: outputs/${experiment_name}
+experiment_name: base
+
+data:
+  source: scan          # "scan" | "synthetic"
+  data_root: data       # SCAN files are expected under ${data.data_root}/SCAN/...
+  scan_split: simple    # simple | add_jump | around_right
+  batch_size: 64
+  num_workers: 0
+  max_src_len: 64
+  max_tgt_len: 128
+  val_fraction: 0.05
+  # synthetic-only fields
+  synthetic_train_size: 256
+  synthetic_val_size: 32
+  synthetic_letters: 8
+
+trainer:
+  max_steps: 20000
+  log_every: 50
+  eval_every: 1000
+  save_every: 2000
+  grad_clip: 1.0
+  lr: 3.0e-4
+  weight_decay: 0.01
+  warmup_steps: 1000
+  optimizer: adamw
+  amp: false             # mixed precision; keep off in Phase 5+ for hyperbolic stability
+  num_eval_batches: 0    # 0 = full eval set
+  num_gen_examples: 8    # qualitative samples logged each eval
+
+wandb:
+  enabled: false
+  project: ldc-research
+  entity: null
+  mode: online           # "online" | "offline" | "disabled"
+  tags: []
+
+model:
+  type: ???              # "baseline" | "ldc_v2" — must be set by leaf config

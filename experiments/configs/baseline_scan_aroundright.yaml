@@ -1,0 +1,29 @@
+defaults:
+  - base
+  - _self_
+
+experiment_name: baseline_scan_aroundright
+
+model:
+  type: baseline
+  d_model: 96
+  n_heads: 4
+  n_enc_layers: 4
+  n_dec_layers: 4
+  ffn_mult: 4
+  dropout: 0.1
+
+trainer:
+  max_steps: 20000
+  lr: 3.0e-4
+  warmup_steps: 1000
+
+data:
+  scan_split: template_around_right
+  batch_size: 64
+
+wandb:
+  tags:
+    - baseline
+    - scan
+    - around_right
