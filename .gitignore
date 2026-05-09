@@ -154,7 +154,6 @@ cython_debug/
 .claude/
 
 # Project specific
-results/
 wandb/
 outputs/
 multirun/
@@ -165,3 +164,4 @@ multirun/
 *.ckpt
 lightning_logs/
 .lightning/
+# Note: results/ contains MD reports — committed to git.
