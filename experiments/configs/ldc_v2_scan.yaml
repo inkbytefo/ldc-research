@@ -39,4 +39,7 @@ data:
   batch_size: 64
 
 wandb:
-  tags: [ldc_v2, scan, ${data.scan_split}]
+  tags:
+    - ldc_v2
+    - scan
+    - ${data.scan_split}
