@@ -83,27 +83,27 @@ HiCoRe bu üç problemin de doğrudan çözümünü mimaride taşır:
 
 ## 3. Bileşen Tasarımı
 
-### 3.1 Hierarchical Role Inventory
+### 3.1 Role Inventory
 
-**Amaç:** Compositional rolleri (verb, modifier, direction, etc.) discrete ve hiyerarşik temsil etmek.
+**Amaç:** Compositional rolleri (verb, modifier, direction, etc.) discrete ve isteğe bağlı hiyerarşik temsil etmek.
 
 **Yapı:**
-- K = 8 öğrenilebilir rol (Faz 1; daha sonra artırılabilir)
-- Her rol bir Poincaré ball R^{d_role=5} embedding'ine sahip
-- Hiyerarşi *implicit* — root yakını rolleri "soyut" (e.g. predicate), kenarda olanlar "specific" (e.g. modifier_quantity)
-- Rol embeddings öğrenilebilir, eğitim sırasında hiperbolik mesafeler organik olarak hiyerarşi oluşturur
+- K = 8 öğrenilebilir rol (Faz HC-1; daha sonra artırılabilir)
+- Her rol d_role boyutlu embedding (default d_role=8, Euclidean)
+- Rol embeddings öğrenilebilir, supervised role auxiliary loss ile yönlendirilir
 
-**Önemli karar:** Faz 1'de roller hand-anotasyon ile süpervize edilir (SCAN için zaten parser var). Faz 2'de unsupervised role induction denenir.
+**Geometri seçimi (hyperbolic flag):**
+- **Default (Faz HC-1): Euclidean.** Stabil, basit, geoopt yok. d_role=8.
+- **Opt-in (Faz HC-2 ablasyon): Hyperbolic.** Poincaré ball R^{d_role=5}. `tanh`-projected raw param ile manifold içinde tutulur. Riemannian Adam henüz kullanılmaz.
 
-**Hyperbolic Geometri Neden:**
-- Roller hiyerarşik (genel → specific) bir yapıya sahiptir
-- Hyperbolic spaces tree-like yapıları Öklid'e göre çok daha verimli embed eder (Nickel & Kiela 2017, Sala et al. 2018)
-- Faz 5 LDC v2'den ertelenen hyperbolic kanca burada anlamlı rol bulur
+**Neden Euclidean-first:** LDC v2'de hyperbolic'i hiç denemedik; numerik instability + position-augmentation Möbius addition gerektirir. Önce Euclidean ile mimari hipotezi doğrula, sonra hyperbolic'in marginal kazanımını ölç (H4 ablasyon).
 
-**Numerik notlar:**
-- fp32 zorunlu (mixed precision rol pathway'inde kapalı)
-- `geoopt` projection clipping aktif
-- Dim 5 minimum (2D unstable, Test 1 LDC v2'den biliniyor)
+**Önemli karar:** Faz HC-1'de roller hand-anotasyon ile süpervize edilir (SCAN parser zaten var). Faz HC-3+'da unsupervised role induction denenir.
+
+**Numerik notlar (hyperbolic mode için):**
+- fp32 zorunlu, mixed precision kapalı
+- `tanh` projection ile boundary'den 0.999 marjı
+- Dim 5 minimum (2D unstable, LDC v2 Test 1)
 
 ---
 
@@ -147,29 +147,61 @@ r_i = exp_map_0(role_embed[role_idx])  # to Poincaré ball
 
 ---
 
-### 3.4 TPR Binding
+### 3.4 TPR Binding (Position-Augmented)
 
-**Amaç:** Filler-role çiftlerini tek bir compositional tensor'a paketlemek.
+**Amaç:** Filler-role çiftlerini tek bir compositional tensor'a paketlemek **ve aynı role'a bind olan birden fazla token'ı disentangle etmek.**
 
-**Matematik:**
+**Naïve TPR'nin Sorunu (Multi-token Same Role):**
+
+Standart TPR `T = Σ f_i ⊗ r_i` kullanıldığında, iki token aynı role bağlandığında (örn. "walk and jump" — her ikisi de action):
 ```
-T = Σ_{i=1}^{N} f_i ⊗ r_i        ∈ R^{d_filler × d_role}
+T = f_walk ⊗ r_action + f_jump ⊗ r_action
+  = (f_walk + f_jump) ⊗ r_action
+```
+Unbinding `T · r_action` toplam vektörü geri verir. Walk veya jump tek tek geri alınamaz. Bilgi kaybı değil — **yıkıcı interferans**. SCAN'da "and" kombinasyonları bu yüzden patlar.
+
+**Çözüm: Position-Augmented Binding**
+
+Her token'a unique pozisyonel perturbation eklenmiş etkin role kullanılır:
+```
+r_eff_i = combine(r_role_i, p_i, α)
+T = Σ_{i=1}^{N} f_i ⊗ r_eff_i
 ```
 
-Burada ⊗ outer product. Toplam tensor T tüm input'un compositional yapısını temsil eder.
+`p_i` öğrenilebilir position vector (d_role boyutlu, sequence position'a bağlı).
+`α` küçük scalar coefficient (default 0.1, ablasyon-hedefli).
 
-**Unbinding (decoder kullanır):**
-```
-f̂_for_role(r) = T · r / ||r||²
-```
+**Geometri-bağımlı `combine`:**
+- **Euclidean (default):** `r_eff_i = r_role_i + α · p_i` — basit toplama.
+- **Hyperbolic (opt-in):** `r_eff_i = mobius_add(r_role_i, α · p_i)` — Poincaré ball içinde kalmak için Möbius addition. (`p_i` log-space'te, exp-map ile manifold'a alınır.) Numerik karmaşıklık Euclidean'a kıyasla daha yüksek.
 
-Yaklaşık ters: bir role ile T çarpıldığında o rolün karşılık geldiği filler geri çıkar (orthogonal roles ideal). Hyperbolic roller için Riemannian inner product kullanılır.
+**α Trade-off:**
+- α → 0: Naïve TPR; multi-role collision sorunu geri gelir.
+- α → büyük: Pure role sharing erozyona uğrar; compositionality bozulur.
+- **Sweet spot bulma:** Faz HC-0 toy task (3-4 token "action and action" örnekleri) ile α ∈ {0.01, 0.05, 0.1, 0.2, 0.5} sweep.
+
+**Unbinding:**
+```
+f̂_for_role_at_position(r, p) = T · combine(r, p, α)
+```
+Decoder her step'te hem role query'si hem pozisyonel hint üretir; ikisinden `r_eff_query` türetilir.
 
 **Boyut:**
-- d_filler = 64, d_role = 5 (Poincaré) veya 32 (Öklid projeksiyon)
-- T → matrix-shaped (B, d_filler, d_role)
+- d_filler = 64-96
+- d_role = 8 (Euclidean default) veya 5 (hyperbolic)
+- T ∈ R^{B × d_filler × d_role}
 
-**Çoklu örnekler:** Aynı role birden fazla token bağlanırsa (e.g., iki action), bunlar T içinde toplanır. Decoder unbind ettiğinde bunları ayırmak için **slot attention benzeri** bir mekanizma var: decoder query q_role üzerinden hangi token'ı çağırdığını seçer.
+**Position vector kaynağı:**
+- Faz HC-1: Sinusoidal positional encoding (sequence index'ten türetilmiş)
+- Faz HC-2 ablasyon: Learnable per-position embedding
+- Edge case: Test-time'da training'den uzun sequence → sinusoidal extrapolation, learnable interpolation
+
+**Alternatif binding mekanizmaları (Faz HC-3+ ablasyon olarak):**
+- **Higher-order tensor:** `T = Σ f_i ⊗ r_i ⊗ p_i` (üçlü binding, decoder'da hem r hem p ile unbind)
+- **Per-role dynamic slots:** Her role için ayrı slot attention; T tensor (B, d_filler, d_role, N_slot)
+- **Relational binding:** Token'lar arası attention'la pairwise bound tensor
+
+Bu alternatifler MVP kapsam dışı; ablasyon H8-H11 olarak değerlendirilir.
 
 ---
 
@@ -218,34 +250,50 @@ Yaklaşık ters: bir role ile T çarpıldığında o rolün karşılık geldiği
 ### 4.1 Loss
 
 ```
-L_total = α · L_lm + β · L_role + γ · L_consistency
+L_total = α_lm · L_lm + β_role · L_role + γ_cons · L_consistency
 ```
 
-- **L_lm:** Standart cross-entropy decoder çıktısı vs target
-- **L_role:** Role inference auxiliary supervision (tagged data)
-- **L_consistency:** İsteğe bağlı; T'nin invarianslarını zorla (e.g., aynı yapı farklı filler ⇒ benzer T projeksiyonu)
+- **L_lm:** Standart cross-entropy decoder çıktısı vs target.
+- **L_role:** Role inference auxiliary supervision. `cross_entropy(role_logits, true_role_labels)`. SCAN için role tagger (`src/data/role_tagger.py`) ground truth sağlar.
+- **L_consistency:** Compositional invariance constraint.
 
-Faz 1'de α=1, β=0.5, γ=0.
+**L_consistency formülü (explicit):**
+
+Aynı yapısal şablon (örn. `<action> twice`) farklı filler'larla iki örnek üretir. Bound tensor T'lerinin role-projected özellikleri benzer olmalı:
+```
+For batch pair (x_a, x_b) with same role-sequence pattern:
+  T_a = bind(filler_a, role_a)
+  T_b = bind(filler_b, role_b)
+  proj_a = T_a · r_template  (e.g. r_modifier)
+  proj_b = T_b · r_template
+  L_cons = MSE(normalize(proj_a), normalize(proj_b))
+```
+Pattern matching: source token role sequence eşitse same-template kabul edilir. Negatif pairs (farklı pattern) için contrastive margin loss da denenebilir (Faz HC-3 ablasyon).
+
+**Faz HC-1 başlangıç ağırlıkları:** α_lm=1.0, β_role=0.5, γ_cons=0.1.
 
 ### 4.2 Curriculum
 
 ```
+Phase 1.0: Role-only pretraining        (5K step; sadece L_role, decoder dondur)
 Phase 1.1: Atomic primitives only       (walk → I_WALK)
 Phase 1.2: Simple compositions          (walk twice → I_WALK I_WALK)
 Phase 1.3: Nested compositions          (walk twice and jump → ...)
 Phase 1.4: Full SCAN train data
 ```
 
-Her sub-phase 5K step. Toplam 20K step (LDC v2 ile aynı bütçe).
+**Phase 1.0 (yeni):** Role inference head ve role inventory'i izole eğit. Decoder + refinement dondurulur. Bu adım L_role'u stabilize eder, sonraki phase'lerde joint training daha temiz olur.
+
+**Phase 1.1-1.4:** Joint training. Her sub-phase 5K step. Toplam 25K step (Phase 1.0 dahil).
 
 **Curriculum hipotezi:** Roller önce basit ortamda öğrenilirse sonradan kompoze edilmesi kolaylaşır.
 
 ### 4.3 Optimizer
 
-- AdamW (Öklid parametreler için)
-- Riemannian Adam (Poincaré rol embeddings için)
+- AdamW (default; Faz HC-1 Euclidean modunda yeterli)
+- Riemannian Adam: yalnızca hyperbolic flag açıkken role inventory için (Faz HC-2+)
 - LR warmup 1K step, cosine decay
-- Mixed precision: rol pathway hariç (numerik stability)
+- Mixed precision: role pathway dışında AMP açık (Euclidean modda problem yok)
 
 ---
 
