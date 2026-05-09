@@ -166,13 +166,16 @@ class LDCModel(nn.Module):
         sos_id: int,
         eos_id: int,
         max_len: int,
-        use_clean: bool = False,
+        use_clean: bool | None = None,
     ) -> torch.Tensor:
         """Generate a target sequence.
 
-        If `use_clean=True`, skip the diffusion sampling and decode directly
-        from the encoder's C_0 (used for ablation A3).
+        `use_clean=None` (default) respects `config.decoder_input`: "clean" ->
+        skip diffusion, "refined" -> run reverse diffusion. Pass True/False to
+        override (used for ablation A3).
         """
+        if use_clean is None:
+            use_clean = self.config.decoder_input == "clean"
         if use_clean:
             c_graph, _, _ = self.encoder(src, src_mask)
         else:
